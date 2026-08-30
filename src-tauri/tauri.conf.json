@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "소비기한",
+        "title": "소비기한 조사",
         "width": 430,
         "height": 900
       }

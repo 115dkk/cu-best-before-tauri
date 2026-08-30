@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = ["crates/core", "src-tauri"]
+exclude = ["scripts/iconize"]
 
 [workspace.package]
 version = "0.1.0"
