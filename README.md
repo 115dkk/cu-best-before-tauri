@@ -41,6 +41,6 @@ npx tauri android build --apk --target aarch64
 
 ### 에뮬레이터/기기 확인
 
-- CI의 **Android debug APK** 워크플로(`workflow_dispatch`, x86_64/aarch64 선택)가 디버그 APK 아티팩트를 만든다. `gh run download <run-id>` 후 `adb install -r`.
+- CI의 **Android debug APK** 워크플로(`workflow_dispatch`, x86_64/aarch64 선택)가 디버그 APK 아티팩트를 만든다. `gh run download <run-id>` 후 `adb install`. 러너마다 디버그 서명 키가 새로 생성되므로 이전 CI 빌드가 설치돼 있으면 `adb uninstall dev.dkk115.cubestbefore` 후 설치한다(`install -r`는 서명 불일치로 조용히 실패한다).
 - 로컬 Windows 빌드(`scripts/android-debug-build.ps1`)는 Tauri CLI의 심볼릭 링크 단계와 Gradle 변환 캐시 이동이 이 환경(개발자 모드 꺼짐, 비관리자 셸)에서 막혀 완주하지 못했다. 개발자 모드가 켜진 PC에서는 `npx tauri android build --debug --target x86_64 --apk`가 그대로 된다.
 - 2026-08-30 API 36 에뮬레이터 실측: 조사표 생성·항목 추가·자동 저장·PNG 내보내기(`/sdcard/Pictures/소비기한/…png`, MediaStore 자동 등록, 소유 패키지 = 이 앱) 모두 정상.

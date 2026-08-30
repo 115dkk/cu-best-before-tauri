@@ -4,9 +4,6 @@ name: Android debug APK
 # artifact. Used for emulator (x86_64) testing when the local Windows build
 # cannot finish (Gradle transform moves / symlinks need Developer Mode).
 on:
-  # TEMP: build on pushes to the feature branch until this workflow reaches main.
-  push:
-    branches: [feat/initial-app]
   workflow_dispatch:
     inputs:
       arch:
