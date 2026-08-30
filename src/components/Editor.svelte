@@ -1,17 +1,8 @@
 <script lang="ts">
-  import {
-    api,
-    errorMessage,
-    LOCATION_LABEL,
-    LOCATIONS,
-    PRODUCTS,
-    type Entry,
-    type Location,
-    type Product,
-    type Sheet,
-  } from "../lib/api";
-  import { sheetLabel } from "../lib/format";
-  import { closeModal, goHome, nav, openModal } from "../lib/nav.svelte";
+  import { api, errorMessage, type EntryView, type Location, type Product } from "../lib/api";
+  import { catalog, productLabel } from "../lib/catalog.svelte";
+  import { closePicker, goHome, nav, openPicker } from "../lib/nav.svelte";
+  import { SheetSession, addEntry, removeEntry, replaceEntry } from "../lib/session.svelte";
   import { showToast } from "../lib/toast.svelte";
   import ProductCard from "./ProductCard.svelte";
   import SlotPicker from "./SlotPicker.svelte";
@@ -22,90 +13,50 @@
 
   let { sheetId }: Props = $props();
 
-  interface PickerTarget {
-    product: Product;
-    /** Index of the entry being edited; undefined when adding. */
-    entryIndex?: number;
-  }
-
-  let sheet = $state<Sheet | null>(null);
+  const session = new SheetSession();
   let location = $state<Location>("store");
-  let picker = $state<PickerTarget | null>(null);
   let exporting = $state(false);
 
   $effect(() => {
     let cancelled = false;
-    api
-      .getSheet(sheetId)
-      .then((s) => {
-        if (!cancelled) sheet = s;
-      })
-      .catch((e: unknown) => {
-        showToast(errorMessage(e), "error");
-        goHome();
-      });
+    session.load(sheetId).catch((e: unknown) => {
+      if (cancelled) return;
+      showToast(errorMessage(e), "error");
+      goHome();
+    });
     return () => {
       cancelled = true;
     };
   });
 
-  // The back gesture pops the modal history entry; drop the picker with it.
-  $effect(() => {
-    if (!nav.modal) picker = null;
-  });
-
   function countOf(loc: Location): number {
+    const sheet = session.sheet;
     if (!sheet) return 0;
-    return PRODUCTS.reduce((n, p) => n + sheet!.sections[loc][p].length, 0);
+    return catalog.products.reduce((n, p) => n + sheet.sections[loc][p.key].length, 0);
   }
 
-  /** Apply a mutation to a copy, persist, and adopt the normalized result. */
-  async function commit(mutate: (next: Sheet) => void) {
-    if (!sheet) return;
-    const next: Sheet = structuredClone($state.snapshot(sheet));
-    mutate(next);
-    try {
-      sheet = await api.saveSheet(next);
-    } catch (e) {
-      showToast(errorMessage(e), "error");
-    }
-  }
-
-  function openAdd(product: Product) {
-    picker = { product };
-    openModal();
-  }
-
-  function openEdit(product: Product, entryIndex: number) {
-    picker = { product, entryIndex };
-    openModal();
-  }
-
-  function onPicked(entry: Entry) {
-    const target = picker;
+  function onPicked(entry: EntryView) {
+    const target = nav.picker;
     if (!target) return;
-    const loc = location;
-    void commit((next) => {
-      const list = next.sections[loc][target.product];
-      if (target.entryIndex === undefined) list.push(entry);
-      else list.splice(target.entryIndex, 1, entry);
-    });
-    closeModal();
+    session.apply(
+      target.at === undefined
+        ? addEntry(location, target.product, entry)
+        : replaceEntry(location, target.product, target.at, entry),
+    );
+    closePicker();
   }
 
-  function remove(product: Product, entryIndex: number) {
-    const loc = location;
-    void commit((next) => {
-      next.sections[loc][product].splice(entryIndex, 1);
-    });
+  function remove(product: Product, at: string) {
+    session.apply(removeEntry(location, product, at));
   }
 
   async function exportPng() {
+    const sheet = session.sheet;
     if (!sheet || exporting) return;
     exporting = true;
     try {
       const result = await api.exportSheet(sheet.id);
-      showToast(`사진에 저장됨 · ${result.file_name}`);
+      showToast(`저장됨 · ${result.path}`);
     } catch (e) {
       showToast(errorMessage(e), "error");
     } finally {
@@ -113,9 +64,11 @@
     }
   }
 
-  const pickerInitial = $derived.by((): Entry | undefined => {
-    if (!sheet || !picker || picker.entryIndex === undefined) return undefined;
-    return sheet.sections[location][picker.product][picker.entryIndex];
+  const pickerInitial = $derived.by((): EntryView | undefined => {
+    const target = nav.picker;
+    const sheet = session.sheet;
+    if (!sheet || !target || target.at === undefined) return undefined;
+    return sheet.sections[location][target.product].find((e) => e.at === target.at);
   });
 </script>
 
@@ -127,13 +80,10 @@
       </svg>
     </button>
     <div class="title">
-      {#if sheet}
-        <span class="sub">조사표</span>{sheetLabel(sheet.created_at)}
-      {:else}
-        <span class="sub">조사표</span>불러오는 중…
-      {/if}
+      <span class="sub">조사표{session.saving ? " · 저장 중" : ""}</span>
+      {session.sheet ? session.sheet.created_label : "불러오는 중…"}
     </div>
-    <button type="button" class="btn press export" onclick={exportPng} disabled={!sheet || exporting}>
+    <button type="button" class="btn press export" onclick={exportPng} disabled={!session.sheet || exporting}>
       <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M10 3v9M6.5 8.5L10 12l3.5-3.5M4 14v2h12v-2" />
       </svg>
@@ -143,32 +93,32 @@
 
   <div class="content">
     <div class="tabs" role="tablist" aria-label="구역">
-      {#each LOCATIONS as loc (loc)}
+      {#each catalog.locations as loc (loc.key)}
         <button
           type="button"
           class="tab press"
-          class:active={location === loc}
+          class:active={location === loc.key}
           role="tab"
-          aria-selected={location === loc}
-          onclick={() => (location = loc)}
+          aria-selected={location === loc.key}
+          onclick={() => (location = loc.key)}
         >
-          {LOCATION_LABEL[loc]}
-          <span class="count num" class:zero={countOf(loc) === 0}>{countOf(loc)}</span>
+          {loc.label}
+          <span class="count num" class:zero={countOf(loc.key) === 0}>{countOf(loc.key)}</span>
         </button>
       {/each}
     </div>
 
-    {#if sheet}
+    {#if session.sheet}
       {#key location}
         <div class="cards">
-          {#each PRODUCTS as product, i (product)}
+          {#each catalog.products as p, i (p.key)}
             <ProductCard
-              {product}
+              label={p.label}
               index={i}
-              entries={sheet.sections[location][product]}
-              onadd={() => openAdd(product)}
-              onedit={(idx) => openEdit(product, idx)}
-              ondelete={(idx) => remove(product, idx)}
+              entries={session.sheet.sections[location][p.key]}
+              onadd={() => openPicker({ product: p.key })}
+              onedit={(at) => openPicker({ product: p.key, at })}
+              ondelete={(at) => remove(p.key, at)}
             />
           {/each}
         </div>
@@ -177,8 +127,14 @@
   </div>
 </div>
 
-{#if sheet && picker && nav.modal}
-  <SlotPicker product={picker.product} initial={pickerInitial} onconfirm={onPicked} onclose={closeModal} />
+{#if session.sheet && nav.picker}
+  <SlotPicker
+    product={nav.picker.product}
+    label={productLabel(nav.picker.product)}
+    initial={pickerInitial}
+    onconfirm={onPicked}
+    onclose={closePicker}
+  />
 {/if}
 
 <style>

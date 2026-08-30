@@ -1,24 +1,23 @@
 <script lang="ts">
-  import { PRODUCT_LABEL, type Entry, type Product } from "../lib/api";
-  import { entryLabel } from "../lib/format";
+  import type { EntryView } from "../lib/api";
 
   interface Props {
-    product: Product;
-    entries: Entry[];
+    label: string;
+    entries: EntryView[];
     index: number;
     onadd: () => void;
-    onedit: (entryIndex: number) => void;
-    ondelete: (entryIndex: number) => void;
+    onedit: (at: string) => void;
+    ondelete: (at: string) => void;
   }
 
-  let { product, entries, index, onadd, onedit, ondelete }: Props = $props();
+  let { label, entries, index, onadd, onedit, ondelete }: Props = $props();
 
   const total = $derived(entries.reduce((sum, e) => sum + e.quantity, 0));
 </script>
 
-<section class="card rise" style:animation-delay="{index * 60}ms" aria-label={PRODUCT_LABEL[product]}>
+<section class="card rise" style:animation-delay="{index * 60}ms" aria-label={label}>
   <header class="head">
-    <h3 class="name">{PRODUCT_LABEL[product]}</h3>
+    <h3 class="name">{label}</h3>
     {#if entries.length > 0}
       <span class="badge num">{total}개 · {entries.length}건</span>
     {:else}
@@ -28,13 +27,13 @@
 
   {#if entries.length > 0}
     <ul class="list">
-      {#each entries as entry, i (entry.at)}
+      {#each entries as entry (entry.at)}
         <li class="row">
-          <button type="button" class="edit press" onclick={() => onedit(i)}>
-            <span class="when num">{entryLabel(entry.at)}</span>
+          <button type="button" class="edit press" onclick={() => onedit(entry.at)}>
+            <span class="when num">{entry.label}</span>
             <span class="qty num">{entry.quantity}<span class="unit">개</span></span>
           </button>
-          <button type="button" class="icon-btn press remove" aria-label="삭제" onclick={() => ondelete(i)}>
+          <button type="button" class="icon-btn press remove" aria-label="삭제" onclick={() => ondelete(entry.at)}>
             <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
               <path d="M5 5l10 10M15 5L5 15" />
             </svg>

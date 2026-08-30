@@ -5,23 +5,23 @@
 
 mod commands;
 
-use chrono::{Duration, Local};
+use chrono::Local;
 use commands::AppState;
-use cu_best_before_core::store::{RETENTION_DAYS, SheetStore};
+use cu_best_before_core::store::SheetStore;
 use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
-            let dir = app.path().app_data_dir()?.join("sheets");
-            let store = SheetStore::open(dir)?;
-            // 앱 시작마다 30일이 지난 조사표를 정리한다(ADR-0004).
-            store.purge_older_than(Local::now().naive_local(), Duration::days(RETENTION_DAYS))?;
+            let store = SheetStore::open_in(app.path().app_data_dir()?)?;
+            // 앱 시작마다 보존 기간이 지난 조사표를 정리한다(ADR-0004).
+            store.purge_expired(Local::now().naive_local())?;
             app.manage(AppState { store });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::catalog,
             commands::list_sheets,
             commands::create_sheet,
             commands::get_sheet,

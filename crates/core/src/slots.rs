@@ -24,8 +24,11 @@ pub struct SlotOptions {
 pub struct DateOption {
     /// 날짜.
     pub date: NaiveDate,
-    /// 날짜 휠에 표시할 라벨, 예: `8/30 (토)`.
+    /// 날짜 휠에 표시할 라벨, 예: `8/30 (일)`.
     pub label: String,
+    /// 이미 지난 슬롯만 있는 날짜인가. 편집 중인 항목을 위해 끼워 넣은 날짜에서만 `true`.
+    #[serde(default)]
+    pub past: bool,
     /// 이 날짜의 후보 시각(오름차순). 항상 하나 이상.
     pub times: Vec<TimeOption>,
 }
@@ -46,6 +49,29 @@ pub struct TimeOption {
 /// 각 날짜의 [`Product::slot_hours`] 중 `at > now`인 것만 담고, 후보가 없는 날짜는 뺀다.
 /// `dates`와 `times`는 모두 오름차순이다.
 pub fn slot_options(product: Product, now: NaiveDateTime, horizon_days: u32) -> SlotOptions {
+    slot_options_with(product, now, horizon_days, None)
+}
+
+/// 기본 범위([`DEFAULT_HORIZON_DAYS`])의 후보 슬롯. shell이 쓰는 진입점이다.
+pub fn default_slot_options(
+    product: Product,
+    now: NaiveDateTime,
+    include: Option<NaiveDateTime>,
+) -> SlotOptions {
+    slot_options_with(product, now, DEFAULT_HORIZON_DAYS, include)
+}
+
+/// [`slot_options`]에 더해, `include`가 이 품목의 슬롯이면 후보에 없더라도 끼워 넣는다.
+///
+/// 이미 지난 항목을 편집할 때 그 슬롯을 휠에서 고를 수 있게 하기 위한 것이다.
+/// 끼워 넣은 날짜가 `now` 이전이면 [`DateOption::past`]가 `true`다. 품목의 슬롯이 아닌
+/// 시각은 무시한다.
+pub fn slot_options_with(
+    product: Product,
+    now: NaiveDateTime,
+    horizon_days: u32,
+    include: Option<NaiveDateTime>,
+) -> SlotOptions {
     let start = now.date();
     let mut dates = Vec::new();
 
@@ -72,27 +98,76 @@ pub fn slot_options(product: Product, now: NaiveDateTime, horizon_days: u32) -> 
             dates.push(DateOption {
                 date,
                 label: date_label(date),
+                past: false,
                 times,
             });
+        }
+    }
+
+    if let Some(at) = include.filter(|at| product.is_slot(*at)) {
+        let option = TimeOption {
+            at,
+            hour: at.hour(),
+            label: time_label(at.hour()),
+        };
+        match dates.iter_mut().find(|day| day.date == at.date()) {
+            Some(day) => {
+                if !day.times.iter().any(|time| time.at == at) {
+                    day.times.push(option);
+                    day.times.sort_by_key(|time| time.at);
+                }
+            }
+            None => {
+                let index = dates.partition_point(|day| day.date < at.date());
+                dates.insert(
+                    index,
+                    DateOption {
+                        date: at.date(),
+                        label: date_label(at.date()),
+                        past: at <= now,
+                        times: vec![option],
+                    },
+                );
+            }
         }
     }
 
     SlotOptions { product, dates }
 }
 
-/// 날짜 휠 라벨: `8/30 (토)`. 월·일은 앞자리 0 없음.
+/// 날짜 휠 라벨: `8/30 (일)`. 월·일은 앞자리 0 없음.
 pub fn date_label(date: NaiveDate) -> String {
     format!("{}/{} ({})", date.month(), date.day(), weekday_label(date))
 }
 
-/// 시각 휠 라벨: `오전 2시`, `오후 12시`. 12시간제이며 0시는 `오전 12시`.
-pub fn time_label(hour: u32) -> String {
+/// 24시간제 시를 (`오전`/`오후`, 12시간제 시)로. 0→(오전, 12), 12→(오후, 12).
+pub fn meridiem(hour: u32) -> (&'static str, u32) {
     let period = if hour < 12 { "오전" } else { "오후" };
     let hour12 = match hour % 12 {
         0 => 12,
         other => other,
     };
+    (period, hour12)
+}
+
+/// 시각 휠 라벨: `오전 2시`, `오후 12시`. 12시간제이며 0시는 `오전 12시`.
+pub fn time_label(hour: u32) -> String {
+    let (period, hour12) = meridiem(hour);
     format!("{period} {hour12}시")
+}
+
+/// 조사표 작성 시각 라벨(화면용): `8/30 (일) 오전 8:02`.
+pub fn sheet_label(at: NaiveDateTime) -> String {
+    let (period, hour12) = meridiem(at.hour());
+    format!(
+        "{}/{} ({}) {} {}:{:02}",
+        at.month(),
+        at.day(),
+        weekday_label(at.date()),
+        period,
+        hour12,
+        at.minute()
+    )
 }
 
 /// 항목 라벨: `8/30 14시`. 월·일은 앞자리 0 없이, 시는 24시간제 두 자리.
@@ -236,6 +311,76 @@ mod tests {
         assert_eq!(options.dates.len(), 1);
         assert_eq!(options.dates[0].date, date(2026, 8, 1));
         assert_eq!(options.dates[0].times.len(), 2);
+    }
+
+    #[test]
+    fn include_inserts_a_past_slot_as_its_own_past_date() {
+        let now = at(2026, 8, 30, 8, 2);
+        let past = at(2026, 8, 29, 14, 0);
+        let options = slot_options_with(Product::Lunchbox, now, DEFAULT_HORIZON_DAYS, Some(past));
+
+        let first = options.dates.first().expect("inserted date comes first");
+        assert_eq!(first.date, date(2026, 8, 29));
+        assert!(first.past);
+        assert_eq!(first.times.len(), 1);
+        assert_eq!(first.times[0].at, past);
+        assert_eq!(first.times[0].label, "오후 2시");
+        assert!(options.dates[1..].iter().all(|day| !day.past));
+        assert_eq!(options.dates.len(), 16);
+    }
+
+    #[test]
+    fn include_merges_into_an_existing_date_without_duplicates() {
+        let now = at(2026, 8, 30, 8, 2);
+        // 오늘 02:00은 지났지만 오늘 14:00은 후보다 → 오늘 날짜에 02:00을 끼워 넣는다.
+        let earlier_today = at(2026, 8, 30, 2, 0);
+        let options = slot_options_with(
+            Product::Lunchbox,
+            now,
+            DEFAULT_HORIZON_DAYS,
+            Some(earlier_today),
+        );
+        let today = options.dates.first().expect("today");
+        assert_eq!(today.date, date(2026, 8, 30));
+        assert!(!today.past, "날짜 자체는 아직 후보를 가진다");
+        assert_eq!(
+            today.times.iter().map(|t| t.at).collect::<Vec<_>>(),
+            [earlier_today, at(2026, 8, 30, 14, 0)]
+        );
+
+        // 이미 후보인 슬롯을 끼워 넣어도 중복되지 않는다.
+        let dup = slot_options_with(
+            Product::Lunchbox,
+            now,
+            DEFAULT_HORIZON_DAYS,
+            Some(at(2026, 8, 30, 14, 0)),
+        );
+        assert_eq!(
+            dup,
+            slot_options(Product::Lunchbox, now, DEFAULT_HORIZON_DAYS)
+        );
+    }
+
+    #[test]
+    fn include_ignores_non_slots_and_default_entry_point_matches() {
+        let now = at(2026, 8, 30, 8, 2);
+        let bogus = at(2026, 8, 29, 13, 0);
+        assert_eq!(
+            slot_options_with(Product::Lunchbox, now, DEFAULT_HORIZON_DAYS, Some(bogus)),
+            slot_options(Product::Lunchbox, now, DEFAULT_HORIZON_DAYS)
+        );
+        assert_eq!(
+            default_slot_options(Product::Burger, now, None),
+            slot_options(Product::Burger, now, DEFAULT_HORIZON_DAYS)
+        );
+    }
+
+    #[test]
+    fn sheet_label_format() {
+        assert_eq!(sheet_label(at(2026, 8, 30, 8, 2)), "8/30 (일) 오전 8:02");
+        assert_eq!(sheet_label(at(2026, 12, 1, 14, 30)), "12/1 (화) 오후 2:30");
+        assert_eq!(sheet_label(at(2026, 1, 5, 0, 5)), "1/5 (월) 오전 12:05");
+        assert_eq!(meridiem(12), ("오후", 12));
     }
 
     #[test]

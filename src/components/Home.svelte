@@ -1,6 +1,5 @@
 <script lang="ts">
   import { api, errorMessage, type SheetSummary } from "../lib/api";
-  import { sheetLabel } from "../lib/format";
   import { openEditor } from "../lib/nav.svelte";
   import { showToast } from "../lib/toast.svelte";
 
@@ -77,7 +76,7 @@
               </div>
             {:else}
               <button type="button" class="open press" onclick={() => openEditor(s.id)}>
-                <span class="when">{sheetLabel(s.created_at)}</span>
+                <span class="when">{s.created_label}</span>
                 <span class="meta num">항목 {s.entry_count} · 수량 {s.total_quantity}</span>
               </button>
               <button type="button" class="icon-btn press trash" aria-label="삭제" onclick={() => (confirming = s.id)}>

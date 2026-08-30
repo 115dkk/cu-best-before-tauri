@@ -1,21 +1,29 @@
-// Screen state bound to browser history so the Android back gesture/button
-// (which Tauri maps to WebView history) walks back through screens and closes
-// the bottom sheet before leaving the app.
+// Screen + slot-picker state bound to browser history (ADR-0007): the Android
+// back gesture is mapped by Tauri to WebView history, so each pushed entry is
+// one "back" step — the picker closes first, then the editor returns home.
+
+import type { LocalDateTime, Product } from "./api";
 
 export type Screen = { name: "home" } | { name: "editor"; sheetId: string };
 
-interface HistoryState {
-  screen: Screen;
-  modal: boolean;
+/** What the slot picker is editing: a product, and the slot of an existing entry when editing. */
+export interface PickerTarget {
+  product: Product;
+  at?: LocalDateTime;
 }
 
-export const nav = $state<{ screen: Screen; modal: boolean }>({
+interface HistoryState {
+  screen: Screen;
+  picker: PickerTarget | null;
+}
+
+export const nav = $state<{ screen: Screen; picker: PickerTarget | null }>({
   screen: { name: "home" },
-  modal: false,
+  picker: null,
 });
 
 function snapshot(): HistoryState {
-  return { screen: $state.snapshot(nav.screen), modal: nav.modal };
+  return { screen: $state.snapshot(nav.screen), picker: $state.snapshot(nav.picker) };
 }
 
 export function initNav(): void {
@@ -23,31 +31,31 @@ export function initNav(): void {
   window.addEventListener("popstate", (event) => {
     const state = event.state as HistoryState | null;
     nav.screen = state?.screen ?? { name: "home" };
-    nav.modal = state?.modal ?? false;
+    nav.picker = state?.picker ?? null;
   });
 }
 
 export function openEditor(sheetId: string): void {
   nav.screen = { name: "editor", sheetId };
-  nav.modal = false;
+  nav.picker = null;
   history.pushState(snapshot(), "");
 }
 
 export function goHome(): void {
-  if (nav.modal) {
-    // Pop the modal entry and the editor entry together.
+  if (nav.picker) {
+    // Picker entry sits directly above the editor entry.
     history.go(-2);
   } else if (nav.screen.name !== "home") {
     history.back();
   }
 }
 
-export function openModal(): void {
-  if (nav.modal) return;
-  nav.modal = true;
+export function openPicker(target: PickerTarget): void {
+  if (nav.picker) return;
+  nav.picker = target;
   history.pushState(snapshot(), "");
 }
 
-export function closeModal(): void {
-  if (nav.modal) history.back();
+export function closePicker(): void {
+  if (nav.picker) history.back();
 }

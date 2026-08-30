@@ -8,6 +8,7 @@
 //! - [`store`] — 조사표 JSON 파일 저장소
 //! - [`render`] — 조사표 PNG 렌더링
 //! - [`export`] — 공용 사진 폴더 경로 유도와 파일 저장
+//! - [`view`] — 화면용 뷰(라벨 포함)와 품목·구역 카탈로그
 //! - [`error`] — 공통 오류 타입
 
 #![forbid(unsafe_code)]
@@ -18,6 +19,7 @@ pub mod export;
 pub mod render;
 pub mod slots;
 pub mod store;
+pub mod view;
 
 pub use domain::*;
 pub use error::{Error, Result};

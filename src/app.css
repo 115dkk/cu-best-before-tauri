@@ -6,7 +6,6 @@
   --surface: #161825;
   --card: #1c1f2e;
   --elev: #262a3e;
-  --line: rgba(255, 255, 255, 0.08);
   --line-strong: rgba(255, 255, 255, 0.14);
 
   --text: #eceef6;
@@ -23,7 +22,6 @@
 
   --radius-lg: 22px;
   --radius-md: 16px;
-  --radius-sm: 12px;
 
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -66,8 +64,7 @@ body {
   min-height: 100dvh;
 }
 
-button,
-input {
+button {
   font: inherit;
   color: inherit;
 }
@@ -78,16 +75,6 @@ button {
   padding: 0;
   cursor: pointer;
   touch-action: manipulation;
-}
-
-input[type="number"] {
-  -moz-appearance: textfield;
-  appearance: textfield;
-}
-input[type="number"]::-webkit-outer-spin-button,
-input[type="number"]::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
 }
 
 h1,

@@ -20,7 +20,7 @@ pub enum Error {
     #[error("{product}의 기한 시각이 아닙니다: {at}")]
     InvalidSlot { product: Product, at: NaiveDateTime },
     /// An entry carried a quantity below 1.
-    #[error("수량은 1 이상이어야 합니다")]
+    #[error("수량은 1 이상 {max} 이하여야 합니다", max = crate::domain::MAX_QUANTITY)]
     InvalidQuantity,
     /// Filesystem failure while reading or writing a sheet or an export.
     #[error("파일 오류: {0}")]

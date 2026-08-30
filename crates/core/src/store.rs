@@ -10,9 +10,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::domain::Sheet;
 use crate::error::{Error, Result};
+use crate::slots;
 
 /// 이 일수보다 오래된 조사표는 앱 시작 시 지운다.
 pub const RETENTION_DAYS: i64 = 30;
+/// 앱 데이터 폴더 아래 조사표를 두는 하위 폴더 이름.
+pub const SHEETS_SUBDIR: &str = "sheets";
 
 /// 목록 화면이 쓰는 요약. 조사표 본문 없이 한 줄을 그리기 위한 최소 정보.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -21,6 +24,8 @@ pub struct SheetSummary {
     pub id: String,
     /// 작성 시각.
     pub created_at: NaiveDateTime,
+    /// 작성 시각의 화면 라벨, 예: `8/30 (일) 오전 8:02`.
+    pub created_label: String,
     /// 마지막 저장 시각.
     pub updated_at: NaiveDateTime,
     /// 모든 구역·품목의 항목 개수.
@@ -35,6 +40,7 @@ impl SheetSummary {
         SheetSummary {
             id: sheet.id.clone(),
             created_at: sheet.created_at,
+            created_label: slots::sheet_label(sheet.created_at),
             updated_at: sheet.updated_at,
             entry_count: sheet.entry_count(),
             total_quantity: sheet.total_quantity(),
@@ -60,9 +66,34 @@ impl SheetStore {
         })
     }
 
+    /// 앱 데이터 폴더 아래 [`SHEETS_SUBDIR`]를 저장소로 연다(ADR-0004의 기본 위치).
+    pub fn open_in(app_data_dir: impl AsRef<Path>) -> Result<SheetStore> {
+        SheetStore::open(app_data_dir.as_ref().join(SHEETS_SUBDIR))
+    }
+
     /// 저장 디렉터리.
     pub fn dir(&self) -> &Path {
         &self.dir
+    }
+
+    /// `now`로 빈 조사표를 만들어 저장하고 돌려준다.
+    ///
+    /// 같은 초에 이미 조사표가 있으면 id에 `-2`, `-3`…을 붙여 덮어쓰지 않는다.
+    pub fn create(&self, now: NaiveDateTime) -> Result<Sheet> {
+        let base = Sheet::sheet_id(now);
+        let mut sheet = Sheet::new(now);
+        let mut suffix = 2u32;
+        while self.path_of(&sheet.id)?.exists() {
+            sheet.id = format!("{base}-{suffix}");
+            suffix += 1;
+        }
+        self.save(&sheet)?;
+        Ok(sheet)
+    }
+
+    /// 보존 기간([`RETENTION_DAYS`])이 지난 조사표를 지운다. 앱 시작 시 부른다.
+    pub fn purge_expired(&self, now: NaiveDateTime) -> Result<Vec<String>> {
+        self.purge_older_than(now, Duration::days(RETENTION_DAYS))
     }
 
     /// id에 해당하는 파일 경로. 파일명으로 안전하지 않은 id는 거부한다.
@@ -213,6 +244,45 @@ mod tests {
         let store = SheetStore::open(&nested).expect("open store");
         assert!(nested.is_dir());
         assert_eq!(store.dir(), nested.as_path());
+    }
+
+    #[test]
+    fn open_in_uses_the_sheets_subdir() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let store = SheetStore::open_in(dir.path()).expect("open_in");
+        assert_eq!(store.dir(), dir.path().join(SHEETS_SUBDIR).as_path());
+        assert!(store.dir().is_dir());
+    }
+
+    #[test]
+    fn create_never_overwrites_a_sheet_made_in_the_same_second() {
+        let (_dir, store) = store();
+        let now = at(2026, 8, 30, 8, 2);
+        let first = store.create(now).expect("create");
+        let second = store.create(now).expect("create again");
+        let third = store.create(now).expect("create a third time");
+
+        assert_eq!(first.id, "20260830-080200");
+        assert_eq!(second.id, "20260830-080200-2");
+        assert_eq!(third.id, "20260830-080200-3");
+        assert_eq!(store.list().expect("list").len(), 3);
+        assert_eq!(store.load(&second.id).expect("load"), second);
+    }
+
+    #[test]
+    fn purge_expired_applies_the_retention_window() {
+        let (_dir, store) = store();
+        let now = at(2026, 8, 30, 9, 0);
+        let mut stale = Sheet::new(at(2026, 7, 1, 9, 0));
+        stale.updated_at = at(2026, 7, 1, 9, 0);
+        let fresh = Sheet::new(at(2026, 8, 29, 9, 0));
+        store.save(&stale).expect("save");
+        store.save(&fresh).expect("save");
+
+        assert_eq!(store.purge_expired(now).expect("purge"), vec![stale.id]);
+        let listed = store.list().expect("list");
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].created_label, "8/29 (토) 오전 9:00");
     }
 
     #[test]

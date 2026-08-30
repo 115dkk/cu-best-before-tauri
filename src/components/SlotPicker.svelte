@@ -1,25 +1,22 @@
 <script lang="ts">
   import { fade, fly } from "svelte/transition";
-  import { api, errorMessage, PRODUCT_LABEL, type Entry, type Product, type SlotOptions } from "../lib/api";
-  import { dateLabel, datePart, hourLabel, parseLocal } from "../lib/format";
+  import { api, errorMessage, type EntryView, type Product, type SlotOptions } from "../lib/api";
   import { showToast } from "../lib/toast.svelte";
   import Wheel, { type WheelItem } from "./Wheel.svelte";
 
   interface Props {
     product: Product;
+    label: string;
     /** Present when editing an existing entry. */
-    initial?: Entry;
-    onconfirm: (entry: Entry) => void;
+    initial?: EntryView;
+    onconfirm: (entry: EntryView) => void;
     onclose: () => void;
   }
 
-  let { product, initial, onconfirm, onclose }: Props = $props();
+  let { product, label, initial, onconfirm, onclose }: Props = $props();
 
-  const MAX_QTY = 99;
-  const QTY_ITEMS: WheelItem[] = Array.from({ length: MAX_QTY }, (_, i) => ({
-    key: String(i + 1),
-    label: `${i + 1}개`,
-  }));
+  /** Wheel range for new entries; the backend caps merged quantities at 999. */
+  const WHEEL_MAX = 99;
 
   let options = $state<SlotOptions | null>(null);
   let dateKey = $state("");
@@ -27,47 +24,38 @@
   let qtyKey = $state("1");
 
   const dates = $derived(options?.dates ?? []);
-  const dateItems = $derived<WheelItem[]>(dates.map((d) => ({ key: d.date, label: d.label })));
+  const dateItems = $derived<WheelItem[]>(
+    dates.map((d) => ({ key: d.date, label: d.past ? `${d.label} · 지남` : d.label })),
+  );
   const times = $derived(dates.find((d) => d.date === dateKey)?.times ?? []);
   const timeItems = $derived<WheelItem[]>(times.map((t) => ({ key: t.at, label: t.label })));
+  const qtyItems = $derived.by((): WheelItem[] => {
+    const values = Array.from({ length: WHEEL_MAX }, (_, i) => i + 1);
+    // An entry merged past the wheel range keeps its exact quantity selectable.
+    if (initial && initial.quantity > WHEEL_MAX) values.push(initial.quantity);
+    return values.map((n) => ({ key: String(n), label: `${n}개` }));
+  });
   const quantity = $derived(Number(qtyKey));
   const canConfirm = $derived(timeKey !== "" && quantity >= 1);
 
   $effect(() => {
     let cancelled = false;
     api
-      .slotOptions(product)
+      .slotOptions(product, initial?.at)
       .then((opts) => {
         if (cancelled) return;
-        options = withInitialSlot(opts, initial);
-        const first = options.dates[0];
-        const wanted = initial ? datePart(initial.at) : undefined;
-        const date = options.dates.find((d) => d.date === wanted) ?? first;
+        options = opts;
+        const date = opts.dates.find((d) => d.date === initial?.at.slice(0, 10)) ?? opts.dates[0];
         dateKey = date?.date ?? "";
         const time = date?.times.find((t) => t.at === initial?.at) ?? date?.times[0];
         timeKey = time?.at ?? "";
-        qtyKey = String(Math.min(MAX_QTY, Math.max(1, initial?.quantity ?? 1)));
+        qtyKey = String(initial?.quantity ?? 1);
       })
       .catch((e: unknown) => showToast(errorMessage(e), "error"));
     return () => {
       cancelled = true;
     };
   });
-
-  /** An entry being edited may sit on a slot that is already past; keep it selectable. */
-  function withInitialSlot(opts: SlotOptions, entry: Entry | undefined): SlotOptions {
-    if (!entry) return opts;
-    const date = datePart(entry.at);
-    const existing = opts.dates.find((d) => d.date === date);
-    if (existing?.times.some((t) => t.at === entry.at)) return opts;
-    const hour = parseLocal(entry.at).hour;
-    const time = { at: entry.at, hour, label: hourLabel(hour) };
-    if (existing) {
-      const times = [...existing.times, time].sort((a, b) => a.at.localeCompare(b.at));
-      return { ...opts, dates: opts.dates.map((d) => (d === existing ? { ...d, times } : d)) };
-    }
-    return { ...opts, dates: [{ date, label: `${dateLabel(date)} · 지남`, times: [time] }, ...opts.dates] };
-  }
 
   function selectDate(key: string) {
     dateKey = key;
@@ -79,7 +67,10 @@
 
   function confirm() {
     if (!canConfirm) return;
-    onconfirm({ at: timeKey, quantity });
+    const time = times.find((t) => t.at === timeKey);
+    if (!time) return;
+    // The label is recomputed by the backend on save; a placeholder keeps the type honest.
+    onconfirm({ at: time.at, quantity, label: "" });
   }
 </script>
 
@@ -89,14 +80,14 @@
   class="sheet"
   role="dialog"
   aria-modal="true"
-  aria-label="{PRODUCT_LABEL[product]} 소비기한 선택"
+  aria-label="{label} 소비기한 선택"
   in:fly={{ y: 40, duration: 280 }}
   out:fly={{ y: 14, duration: 160 }}
 >
   <div class="grip" aria-hidden="true"></div>
   <header class="head">
     <div>
-      <h2 class="name">{PRODUCT_LABEL[product]}</h2>
+      <h2 class="name">{label}</h2>
       <p class="hint">{initial ? "항목 수정" : "소비기한과 수량"}</p>
     </div>
     <button type="button" class="icon-btn press" aria-label="닫기" onclick={onclose}>
@@ -122,7 +113,7 @@
         <Wheel items={timeItems} value={timeKey} onchange={(k) => (timeKey = k)} ariaLabel="시각" />
       </div>
       <div class="col qty">
-        <Wheel items={QTY_ITEMS} value={qtyKey} onchange={(k) => (qtyKey = k)} ariaLabel="수량" />
+        <Wheel items={qtyItems} value={qtyKey} onchange={(k) => (qtyKey = k)} ariaLabel="수량" />
       </div>
     {:else}
       <p class="placeholder">불러오는 중…</p>

@@ -99,12 +99,15 @@ impl fmt::Display for Location {
     }
 }
 
+/// 항목 하나가 가질 수 있는 최대 수량. 같은 슬롯을 합칠 때도 이 값에서 포화한다.
+pub const MAX_QUANTITY: u32 = 999;
+
 /// "이 슬롯에 만료되는 상품이 N개 있다"는 기록.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Entry {
     /// 기한 슬롯(기기 로컬 시각).
     pub at: NaiveDateTime,
-    /// 수량. 정규화 후에는 항상 1 이상.
+    /// 수량. 정규화 후에는 항상 `1..=MAX_QUANTITY`.
     pub quantity: u32,
 }
 
@@ -210,7 +213,7 @@ impl Sheet {
                     .unwrap_or_default();
 
                 for entry in &entries {
-                    if entry.quantity < 1 {
+                    if !(1..=MAX_QUANTITY).contains(&entry.quantity) {
                         return Err(Error::InvalidQuantity);
                     }
                     if !product.is_slot(entry.at) {
@@ -254,13 +257,16 @@ fn empty_sections() -> BTreeMap<Location, Section> {
         .collect()
 }
 
-/// 슬롯 오름차순으로 정렬된 항목에서 같은 슬롯을 하나로 합친다(수량 포화 합).
+/// 슬롯 오름차순으로 정렬된 항목에서 같은 슬롯을 하나로 합친다(수량은 [`MAX_QUANTITY`]에서 포화).
 fn merge_same_slot(entries: Vec<Entry>) -> Vec<Entry> {
     let mut merged: Vec<Entry> = Vec::with_capacity(entries.len());
     for entry in entries {
         match merged.last_mut() {
             Some(last) if last.at == entry.at => {
-                last.quantity = last.quantity.saturating_add(entry.quantity);
+                last.quantity = last
+                    .quantity
+                    .saturating_add(entry.quantity)
+                    .min(MAX_QUANTITY);
             }
             _ => merged.push(entry),
         }
@@ -567,8 +573,15 @@ mod tests {
             );
         assert_eq!(sheet.total_quantity(), u32::MAX);
 
-        // 같은 슬롯 병합도 포화 덧셈이다.
-        sheet
+        // 상한을 넘는 항목은 정규화가 거부한다.
+        assert!(matches!(
+            sheet.clone().normalized(now),
+            Err(Error::InvalidQuantity)
+        ));
+
+        // 같은 슬롯 병합은 상한에서 포화한다.
+        let mut capped = Sheet::new(now);
+        capped
             .sections
             .get_mut(&Location::Store)
             .expect("store section")
@@ -577,7 +590,7 @@ mod tests {
                 vec![
                     Entry {
                         at: at(2026, 8, 30, 14, 0),
-                        quantity: u32::MAX,
+                        quantity: MAX_QUANTITY,
                     },
                     Entry {
                         at: at(2026, 8, 30, 14, 0),
@@ -585,12 +598,12 @@ mod tests {
                     },
                 ],
             );
-        let normalized = sheet.normalized(now).expect("valid");
+        let normalized = capped.normalized(now).expect("valid");
         assert_eq!(
             normalized.entries(Location::Store, Product::Gimbap),
             &[Entry {
                 at: at(2026, 8, 30, 14, 0),
-                quantity: u32::MAX,
+                quantity: MAX_QUANTITY,
             }]
         );
     }

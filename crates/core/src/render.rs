@@ -1,6 +1,6 @@
 //! 조사표를 PNG 한 장으로 그린다(ADR-0002).
 //!
-//! 시스템 폰트를 쓰지 않고 Pretendard Std Regular/Bold를 번들해, 기기·에뮬레이터·CI
+//! 시스템 폰트를 쓰지 않고 Pretendard Regular/Bold를 번들해, 기기·에뮬레이터·CI
 //! 어디서나 같은 픽셀이 나오게 한다. 레이아웃 규칙(행 생략, 빈 구역 X표, 행 높이)은
 //! 도메인 규칙이라 단위 테스트 대상이다.
 
@@ -60,8 +60,8 @@ const ENTRY_SIZE: f32 = 40.0;
 const WHITE: Rgba<u8> = Rgba([255, 255, 255, 255]);
 const INK: Rgba<u8> = Rgba([17, 17, 17, 255]);
 
-const REGULAR_FONT: &[u8] = include_bytes!("../assets/fonts/PretendardStd-Regular.otf");
-const BOLD_FONT: &[u8] = include_bytes!("../assets/fonts/PretendardStd-Bold.otf");
+const REGULAR_FONT: &[u8] = include_bytes!("../assets/fonts/Pretendard-Regular.otf");
+const BOLD_FONT: &[u8] = include_bytes!("../assets/fonts/Pretendard-Bold.otf");
 
 /// 번들 폰트 두 벌.
 struct Fonts<'a> {
@@ -128,7 +128,7 @@ fn layout(sheet: &Sheet) -> Vec<Block<'_>> {
                 })
                 .collect();
 
-            let rows = if rows.is_empty() {
+            let rows = if sheet.is_section_empty(location) {
                 vec![(Row::Empty, EMPTY_ROW_HEIGHT)]
             } else {
                 rows
@@ -170,13 +170,9 @@ pub fn render_png(sheet: &Sheet) -> Result<Vec<u8>> {
     Ok(buffer)
 }
 
-/// 헤더 오른쪽의 작성 시각: `2026.08.30 (토) 오전 8:02`.
+/// 헤더 오른쪽의 작성 시각: `2026.08.30 (일) 오전 8:02`.
 fn header_timestamp(at: NaiveDateTime) -> String {
-    let period = if at.hour() < 12 { "오전" } else { "오후" };
-    let hour12 = match at.hour() % 12 {
-        0 => 12,
-        other => other,
-    };
+    let (period, hour12) = slots::meridiem(at.hour());
     format!(
         "{}.{:02}.{:02} ({}) {} {}:{:02}",
         at.year(),
@@ -539,6 +535,36 @@ mod tests {
         assert_eq!(blocks[0].height(), 96 * 2);
         assert!(matches!(blocks[1].rows[0].0, Row::Empty));
         assert_eq!(blocks[1].height(), EMPTY_ROW_HEIGHT);
+    }
+
+    // 회귀 방지: Pretendard Std 서브셋은 ttf-parser에서 한글 cmap 조회가 0(notdef)으로 떨어져
+    // PNG의 한글이 전부 두부(빈 사각형)로 나왔다. 번들 폰트는 한글을 실제 글리프로 매핑해야 한다.
+    #[test]
+    fn bundled_fonts_map_hangul_to_real_glyphs() {
+        use ab_glyph::Font;
+        let fonts = Fonts::bundled().expect("bundled fonts parse");
+        for c in [
+            "소비기한 조사표",
+            "매장",
+            "워크인",
+            "삼각김밥",
+            "샌드위치",
+            "햄버거",
+            "개",
+            "시",
+            "일",
+        ]
+        .iter()
+        .flat_map(|s| s.chars())
+        .filter(|c| !c.is_whitespace())
+        {
+            assert_ne!(
+                fonts.regular.glyph_id(c).0,
+                0,
+                "Regular lacks glyph for {c:?}"
+            );
+            assert_ne!(fonts.bold.glyph_id(c).0, 0, "Bold lacks glyph for {c:?}");
+        }
     }
 
     #[test]
