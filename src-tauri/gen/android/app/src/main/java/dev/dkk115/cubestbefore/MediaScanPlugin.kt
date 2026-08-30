@@ -2,7 +2,6 @@ package dev.dkk115.cubestbefore
 
 import android.app.Activity
 import android.media.MediaScannerConnection
-import android.provider.MediaStore
 import app.tauri.annotation.Command
 import app.tauri.annotation.InvokeArg
 import app.tauri.annotation.TauriPlugin
@@ -31,16 +30,14 @@ class MediaScanPlugin(private val activity: Activity) : Plugin(activity) {
       invoke.reject("file not found: ${args.path}")
       return
     }
-    val result = JSObject()
-    try {
-      // Blocking scan (API 29+): returns the MediaStore uri once the row exists.
-      val uri = MediaStore.scanFile(activity.contentResolver, file)
+    // Resolves once the media scanner has indexed the file (uri is null if it refused it).
+    MediaScannerConnection.scanFile(
+      activity.applicationContext,
+      arrayOf(file.absolutePath),
+      arrayOf("image/png")
+    ) { _, uri ->
+      val result = JSObject()
       result.put("uri", uri?.toString())
-      invoke.resolve(result)
-    } catch (e: Exception) {
-      // Fall back to the async scanner; resolve without waiting for its callback.
-      MediaScannerConnection.scanFile(activity.applicationContext, arrayOf(file.absolutePath), arrayOf("image/png"), null)
-      result.put("uri", null)
       invoke.resolve(result)
     }
   }
