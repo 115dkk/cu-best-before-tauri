@@ -4,6 +4,7 @@
 #![forbid(unsafe_code)]
 
 mod commands;
+mod media_scan;
 
 use chrono::Local;
 use commands::AppState;
@@ -13,6 +14,7 @@ use tauri::Manager;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(media_scan::init())
         .setup(|app| {
             let store = SheetStore::open_in(app.path().app_data_dir()?)?;
             // 앱 시작마다 보존 기간이 지난 조사표를 정리한다(ADR-0004).

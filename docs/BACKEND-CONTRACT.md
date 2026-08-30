@@ -163,7 +163,7 @@ pub fn render_png(sheet: &Sheet) -> Result<Vec<u8>>;
 
 ```rust
 pub const EXPORT_SUBDIR: &str = "소비기한";
-pub struct ExportResult { pub path: String, pub file_name: String, pub bytes: u64 }
+pub struct ExportResult { pub path: String, pub file_name: String, pub bytes: u64, #[serde(default)] pub media_uri: Option<String> /* shell이 Android에서 채움 */ }
 pub fn public_pictures_dir(app_pictures_dir: &Path) -> PathBuf;  // ".../Android/data/<pkg>/files/Pictures" → ".../Pictures"; Android 없으면 그대로
 pub fn export_file_name(sheet: &Sheet) -> String;                // "소비기한_2026-08-30_0802.png"
 pub fn export_png(sheet: &Sheet, pictures_dir: &Path) -> Result<ExportResult>; // pictures_dir/소비기한/<name>, 덮어쓰기
@@ -214,7 +214,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 | `save_sheet` | `sheet: Sheet` (뷰 JSON 허용) | `SheetView` | `normalized(now)` → `store.save` → 뷰 |
 | `delete_sheet` | `id: String` | `()` | `store.delete` |
 | `slot_options` | `product: Product, include: Option<NaiveDateTime>` | `SlotOptions` | `default_slot_options(product, now, include)` |
-| `export_sheet` | `id: String` | `ExportResult` | `store.load` → `picture_dir()` → `public_pictures_dir` → `export_png` |
+| `export_sheet` | `id: String` | `ExportResult` | `store.load` → `picture_dir()` → `public_pictures_dir` → `export_png` → Android: `MediaScanPlugin.scanFile`로 MediaStore 등록(`media_uri`) |
 
 프론트엔드 호출 예: `invoke("slot_options", { product: "lunchbox", include: "2026-08-29T14:00:00" | null })`.
 

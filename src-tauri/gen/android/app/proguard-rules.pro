@@ -19,3 +19,10 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+# Tauri loads Android plugin classes by name (reflection) and dispatches
+# @Command methods reflectively; keep the app's own plugin intact under R8.
+-keep @app.tauri.annotation.TauriPlugin class dev.dkk115.cubestbefore.** { *; }
+-keep @app.tauri.annotation.InvokeArg class dev.dkk115.cubestbefore.** { *; }
+-keepclassmembers class dev.dkk115.cubestbefore.** {
+  @app.tauri.annotation.Command <methods>;
+}
