@@ -1,4 +1,4 @@
 <resources>
-    <string name="app_name">"소비기한"</string>
-    <string name="main_activity_title">"소비기한"</string>
+    <string name="app_name">"소비기한 조사"</string>
+    <string name="main_activity_title">"소비기한 조사"</string>
 </resources>

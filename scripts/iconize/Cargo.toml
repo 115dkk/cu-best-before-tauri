@@ -1,0 +1,9 @@
+[package]
+name = "iconize"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Derives tauri-icon manifest layers (default / android bg / fg / monochrome) from the app icon mockup"
+
+[dependencies]
+image = { version = "0.25", default-features = false, features = ["png"] }
