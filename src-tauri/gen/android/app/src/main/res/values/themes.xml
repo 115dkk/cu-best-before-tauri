@@ -1,0 +1,8 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme: always dark to match the WebView palette (src/app.css bg token). -->
+    <style name="Theme.cu_best_before" parent="Theme.MaterialComponents.NoActionBar">
+        <item name="android:windowBackground">@color/app_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>
