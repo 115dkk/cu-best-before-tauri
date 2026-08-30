@@ -111,7 +111,7 @@ pub struct TimeOption { pub at: NaiveDateTime, pub hour: u32, pub label: String 
 /// now.date()부터 horizon_days일 뒤 날짜까지, 각 날짜의 slot_hours 중 at > now 인 것만. 빈 날짜 제외, 오름차순.
 pub fn slot_options(product: Product, now: NaiveDateTime, horizon_days: u32) -> SlotOptions;
 /// 위에 더해 `include`가 이 품목의 슬롯이면 후보에 없더라도 끼워 넣는다(편집 중인 항목용).
-/// 새로 끼워 넣은 날짜가 now 이전이면 past = true. 품목의 슬롯이 아닌 시각은 무시.
+/// 새로 끼워 넣은 날짜의 슬롯이 후보 조건(at > now)을 만족하지 않으면(정확히 now 포함) past = true. 품목의 슬롯이 아닌 시각은 무시.
 pub fn slot_options_with(product, now, horizon_days, include: Option<NaiveDateTime>) -> SlotOptions;
 /// shell 진입점: DEFAULT_HORIZON_DAYS 고정.
 pub fn default_slot_options(product, now, include: Option<NaiveDateTime>) -> SlotOptions;

@@ -26,7 +26,8 @@ pub struct DateOption {
     pub date: NaiveDate,
     /// 날짜 휠에 표시할 라벨, 예: `8/30 (일)`.
     pub label: String,
-    /// 이미 지난 슬롯만 있는 날짜인가. 편집 중인 항목을 위해 끼워 넣은 날짜에서만 `true`.
+    /// 후보가 아닌(이미 지났거나 정확히 `now`인) 슬롯만 있는 날짜인가.
+    /// 편집 중인 항목을 위해 끼워 넣은 날짜에서만 `true`.
     #[serde(default)]
     pub past: bool,
     /// 이 날짜의 후보 시각(오름차순). 항상 하나 이상.
@@ -64,7 +65,8 @@ pub fn default_slot_options(
 /// [`slot_options`]에 더해, `include`가 이 품목의 슬롯이면 후보에 없더라도 끼워 넣는다.
 ///
 /// 이미 지난 항목을 편집할 때 그 슬롯을 휠에서 고를 수 있게 하기 위한 것이다.
-/// 끼워 넣은 날짜가 `now` 이전이면 [`DateOption::past`]가 `true`다. 품목의 슬롯이 아닌
+/// 끼워 넣은 날짜의 슬롯이 후보 조건(`at > now`, ADR-0006)을 만족하지 않으면
+/// [`DateOption::past`]가 `true`다(정확히 `now`인 슬롯도 후보가 아니므로 `true`). 품목의 슬롯이 아닌
 /// 시각은 무시한다.
 pub fn slot_options_with(
     product: Product,

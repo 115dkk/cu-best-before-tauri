@@ -3,7 +3,7 @@
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use chrono::{Duration, NaiveDateTime};
 use serde::{Deserialize, Serialize};
@@ -80,6 +80,8 @@ impl SheetStore {
     ///
     /// 같은 초에 이미 조사표가 있으면 id에 `-2`, `-3`…을 붙여 덮어쓰지 않는다.
     pub fn create(&self, now: NaiveDateTime) -> Result<Sheet> {
+        // 존재 확인부터 저장까지 한 잠금 안에서 처리해, 같은 초의 동시 생성이 같은 id를 얻지 못하게 한다.
+        let _guard = self.lock()?;
         let base = Sheet::sheet_id(now);
         let mut sheet = Sheet::new(now);
         let mut suffix = 2u32;
@@ -87,7 +89,7 @@ impl SheetStore {
             sheet.id = format!("{base}-{suffix}");
             suffix += 1;
         }
-        self.save(&sheet)?;
+        self.write_unlocked(&sheet)?;
         Ok(sheet)
     }
 
@@ -106,10 +108,19 @@ impl SheetStore {
 
     /// 임시 파일에 쓴 뒤 rename해 원자적으로 저장한다(같은 이름은 덮어쓴다).
     pub fn save(&self, sheet: &Sheet) -> Result<()> {
-        let _guard = self
-            .write_lock
+        let _guard = self.lock()?;
+        self.write_unlocked(sheet)
+    }
+
+    /// 프로세스 내 쓰기 잠금. 같은 `<id>.json.tmp`를 두 저장이 동시에 건드리지 않게 한다.
+    fn lock(&self) -> Result<MutexGuard<'_, ()>> {
+        self.write_lock
             .lock()
-            .map_err(|_| Error::Io(std::io::Error::other("조사표 저장 잠금이 손상되었습니다")))?;
+            .map_err(|_| Error::Io(std::io::Error::other("조사표 저장 잠금이 손상되었습니다")))
+    }
+
+    /// 잠금을 잡은 호출자만 부른다: 임시 파일에 쓰고 rename한다.
+    fn write_unlocked(&self, sheet: &Sheet) -> Result<()> {
         let path = self.path_of(&sheet.id)?;
         let tmp = path.with_extension("json.tmp");
         let bytes = serde_json::to_vec_pretty(sheet)?;
