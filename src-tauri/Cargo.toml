@@ -1,0 +1,23 @@
+[package]
+name = "cu-best-before"
+description = "CU 소비기한 조사표 작성기 (Tauri shell)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[lib]
+# The `_lib` suffix keeps the lib name distinct from the bin name on Windows.
+name = "cu_best_before_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+cu-best-before-core = { path = "../crates/core" }
+tauri = { version = "2", features = [] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }

@@ -1,0 +1,22 @@
+[package]
+name = "cu-best-before-core"
+description = "Pure domain logic: products, expiry slots, sheet store, PNG rendering"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+thiserror = { workspace = true }
+# Rendering: pure-Rust only (no C build scripts) so the Android cross build stays simple.
+# `image` carries just the PNG codec; `imageproc` drops rayon; `ab_glyph` is the OTF parser.
+image = { version = "0.25", default-features = false, features = ["png"] }
+imageproc = { version = "0.25", default-features = false }
+ab_glyph = { version = "0.2", default-features = false, features = ["std"] }
+
+[dev-dependencies]
+tempfile = "3"

@@ -1,0 +1,28 @@
+# Node
+node_modules/
+dist/
+vite.config.ts.timestamp-*
+vite.config.js.timestamp-*
+.env
+.env.*
+!.env.example
+
+# Rust
+target/
+
+# Android local files (never commit signing material)
+*.jks
+*.keystore
+keystore.properties
+local.properties
+.secrets/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Claude Code agent worktrees
+.claude/worktrees/

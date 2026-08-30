@@ -1,0 +1,105 @@
+name: Release
+
+# On every push to main (including PR merges): re-run all checks, build the
+# arm64 Android APK, sign it with the keystore from repository secrets, and
+# publish a GitHub Release tagged v<version>-r<run_number>.
+# Action majors are kept current (node24 runtimes) to avoid runtime-deprecation warnings.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  NDK_VERSION: 28.2.13676358
+  ANDROID_PLATFORM: android-36
+  BUILD_TOOLS: 36.0.0
+
+jobs:
+  checks:
+    name: checks
+    uses: ./.github/workflows/ci.yml
+
+  build-android:
+    name: build & release APK (arm64)
+    needs: checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: >-
+            platform-tools
+            platforms;${{ env.ANDROID_PLATFORM }}
+            build-tools;${{ env.BUILD_TOOLS }}
+            ndk;${{ env.NDK_VERSION }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: android-aarch64
+
+      - run: npm ci
+
+      - name: Build APK
+        env:
+          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/${{ env.NDK_VERSION }}
+        run: |
+          chmod +x src-tauri/gen/android/gradlew
+          npx tauri android build --apk --target aarch64
+
+      - name: Sign APK
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "$ANDROID_KEYSTORE_BASE64" || { echo "::error::ANDROID_KEYSTORE_BASE64 secret is missing"; exit 1; }
+          VERSION=$(jq -r .version src-tauri/tauri.conf.json)
+          UNSIGNED=$(find src-tauri/gen/android/app/build/outputs/apk -name '*release*.apk' | head -n1)
+          test -n "$UNSIGNED" || { echo "::error::no release APK produced"; exit 1; }
+          echo "unsigned: $UNSIGNED"
+          BT="$ANDROID_HOME/build-tools/$BUILD_TOOLS"
+          KS="$RUNNER_TEMP/release.jks"
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$KS"
+          mkdir -p out
+          "$BT/zipalign" -p -f 4 "$UNSIGNED" out/aligned.apk
+          OUT="out/cu-best-before-v${VERSION}-r${{ github.run_number }}-arm64.apk"
+          "$BT/apksigner" sign --ks "$KS" --ks-key-alias "$ANDROID_KEY_ALIAS" \
+            --ks-pass "pass:$ANDROID_KEYSTORE_PASSWORD" --key-pass "pass:$ANDROID_KEY_PASSWORD" \
+            --out "$OUT" out/aligned.apk
+          "$BT/apksigner" verify --print-certs "$OUT"
+          rm -f "$KS" out/aligned.apk
+          echo "APK=$OUT" >> "$GITHUB_ENV"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: v${{ env.VERSION }}-r${{ github.run_number }}
+          name: v${{ env.VERSION }}-r${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          files: ${{ env.APK }}
