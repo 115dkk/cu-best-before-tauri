@@ -4,6 +4,9 @@ name: Android debug APK
 # artifact. Used for emulator (x86_64) testing when the local Windows build
 # cannot finish (Gradle transform moves / symlinks need Developer Mode).
 on:
+  # TEMP: build on pushes to the feature branch until this workflow reaches main.
+  push:
+    branches: [feat/initial-app]
   workflow_dispatch:
     inputs:
       arch:
@@ -23,7 +26,7 @@ env:
 
 jobs:
   build:
-    name: debug APK (${{ inputs.arch }})
+    name: debug APK (${{ inputs.arch || 'x86_64' }})
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -48,11 +51,11 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ inputs.arch }}-linux-android
+          targets: ${{ inputs.arch || 'x86_64' }}-linux-android
 
       - uses: Swatinem/rust-cache@v2
         with:
-          key: android-debug-${{ inputs.arch }}
+          key: android-debug-${{ inputs.arch || 'x86_64' }}
 
       - run: npm ci
 
@@ -61,12 +64,12 @@ jobs:
           NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/${{ env.NDK_VERSION }}
         run: |
           chmod +x src-tauri/gen/android/gradlew
-          npx tauri android build --debug --apk --target ${{ inputs.arch }}
+          npx tauri android build --debug --apk --target ${{ inputs.arch || 'x86_64' }}
           find src-tauri/gen/android/app/build/outputs/apk -name '*.apk' -print
 
       - uses: actions/upload-artifact@v7
         with:
-          name: cu-best-before-debug-${{ inputs.arch }}
+          name: cu-best-before-debug-${{ inputs.arch || 'x86_64' }}
           path: src-tauri/gen/android/app/build/outputs/apk/**/debug/*.apk
           if-no-files-found: error
           retention-days: 7
