@@ -56,7 +56,7 @@
     exporting = true;
     try {
       const result = await api.exportSheet(sheet.id);
-      showToast(`저장됨 · ${result.path}`);
+      showToast(result.media_uri ? `갤러리에 저장됨 · ${result.path}` : `저장됨 · ${result.path}`);
     } catch (e) {
       showToast(errorMessage(e), "error");
     } finally {

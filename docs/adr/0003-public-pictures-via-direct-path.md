@@ -1,6 +1,6 @@
 # ADR-0003: 공용 Pictures 폴더는 앱 외부 저장소 경로에서 파생해 직접 쓴다
 
-- 상태: 채택 (2026-08-30) — 에뮬레이터/실기기 검증으로 확정, 실패 시 대안으로 전환
+- 상태: 채택 (2026-08-30), 실기기 검증 후 보강 — 직접 쓰기 + **명시적 MediaStore 스캔**
 
 ## 배경
 
@@ -16,6 +16,12 @@ Tauri 2의 `app.path().picture_dir()`는 Android에서 `getExternalFilesDir(DIRE
 
 - Kotlin Tauri 플러그인으로 `MediaStore.Images` insert — 정석이지만 Kotlin 코드·플러그인 크레이트가 추가된다. 직접 경로 쓰기가 기기에서 실패하면 이 경로로 간다.
 - Rust `jni`로 MediaStore 호출 — `unsafe` 한 줄이 필요해 사용자의 unsafe 회피 원칙과 충돌한다.
+
+## 보강 (실기기 결과)
+
+- API 36 에뮬레이터는 직접 경로로 쓴 파일을 FUSE가 자동 등록했지만, **Galaxy S26 Ultra / Android 16은 파일은 생기되 갤러리에 잡히지 않았다**(루트 탐색기로 파일 존재 확인).
+- 그래서 내보내기 직후 shell이 Kotlin 플러그인 `MediaScanPlugin`(앱 모듈 안, `gen/android/app/src/main/java/dev/dkk115/cubestbefore/`)의 `scanFile`을 호출해 `MediaStore.scanFile`로 등록한다. Rust 쪽은 `src-tauri/src/media_scan.rs`(Android에서만 활성, 데스크톱은 no-op). 별도 플러그인 크레이트나 `unsafe`는 없다.
+- `ExportResult.media_uri`에 등록된 content uri를 담아 화면이 "갤러리에 저장됨"을 구분해 보여준다.
 
 ## 결과
 

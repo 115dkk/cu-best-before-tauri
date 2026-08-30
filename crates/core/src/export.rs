@@ -31,6 +31,9 @@ pub struct ExportResult {
     pub file_name: String,
     /// 저장된 파일 크기(바이트).
     pub bytes: u64,
+    /// 기기 미디어 인덱스(MediaStore) uri. shell이 Android에서 채우며, 데스크톱이나 등록 전에는 `None`.
+    #[serde(default)]
+    pub media_uri: Option<String>,
 }
 
 /// 앱 전용 Pictures 경로에서 기기 공용 Pictures 경로를 유도한다.
@@ -75,6 +78,7 @@ pub fn export_png(sheet: &Sheet, pictures_dir: &Path) -> Result<ExportResult> {
         path: path.to_string_lossy().into_owned(),
         file_name,
         bytes,
+        media_uri: None,
     })
 }
 

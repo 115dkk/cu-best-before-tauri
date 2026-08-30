@@ -11,6 +11,8 @@ use cu_best_before_core::view::{Catalog, SheetView};
 use cu_best_before_core::{Product, Sheet};
 use tauri::{AppHandle, Manager, State};
 
+use crate::media_scan;
+
 /// 앱 전체가 공유하는 조사표 저장소.
 pub struct AppState {
     pub store: SheetStore,
@@ -73,7 +75,7 @@ pub fn slot_options(product: Product, include: Option<NaiveDateTime>) -> SlotOpt
     slots::default_slot_options(product, now(), include)
 }
 
-/// 조사표를 기기 공용 사진 폴더에 PNG로 저장한다.
+/// 조사표를 기기 공용 사진 폴더에 PNG로 저장하고, 갤러리가 보도록 MediaStore에 등록한다.
 #[tauri::command]
 pub fn export_sheet(
     app: AppHandle,
@@ -84,5 +86,8 @@ pub fn export_sheet(
     // Android에서 picture_dir()는 앱 전용 폴더를 준다. 공용 폴더로 반드시 바꾼다(ADR-0003).
     let app_pictures = app.path().picture_dir().map_err(message)?;
     let pictures = export::public_pictures_dir(&app_pictures);
-    export::export_png(&sheet, &pictures).map_err(message)
+    let mut result = export::export_png(&sheet, &pictures).map_err(message)?;
+    // 파일은 이미 저장됐다. 등록 실패는 오류로 알리되, 파일이 사라지는 것은 아니다.
+    result.media_uri = media_scan::register_export(&app, &result.path)?;
+    Ok(result)
 }

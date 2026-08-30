@@ -73,6 +73,8 @@ export interface ExportResult {
   path: string;
   file_name: string;
   bytes: number;
+  /** MediaStore content uri once the file is registered with the gallery (Android). */
+  media_uri: string | null;
 }
 
 export const api = {
