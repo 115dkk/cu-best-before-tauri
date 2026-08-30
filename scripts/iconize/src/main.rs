@@ -90,9 +90,11 @@ fn main() {
     // --- app-icon-bg.png: the vertical gradient of the tile itself, sampled at its left margin
     // (well outside the document) and stretched across the whole canvas edge to edge ---
     let mut bg: RgbaImage = ImageBuffer::new(OUT, OUT);
+    // Rows are taken from the straight part of the tile edge so the rounded corners never leak in.
     let sample_x = tx0 + tile_w / 12;
+    let (row_first, row_last) = (ty0 + tile_w / 16, ty0 + tile_w - tile_w / 16);
     for y in 0..OUT {
-        let src_y = ty0 + (u64::from(y) * u64::from(tile_w - 1) / u64::from(OUT - 1)) as u32;
+        let src_y = row_first + (u64::from(y) * u64::from(row_last - row_first) / u64::from(OUT - 1)) as u32;
         let mut col = *src.get_pixel(sample_x, src_y);
         col[3] = 255;
         for x in 0..OUT {
