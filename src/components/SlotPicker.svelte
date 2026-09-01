@@ -69,8 +69,9 @@
     if (!canConfirm) return;
     const time = times.find((t) => t.at === timeKey);
     if (!time) return;
-    // The label is recomputed by the backend on save; a placeholder keeps the type honest.
-    onconfirm({ at: time.at, quantity, label: "" });
+    // The label and `past` are recomputed by the backend on save; placeholders keep the type honest.
+    const past = dates.find((d) => d.date === dateKey)?.past ?? false;
+    onconfirm({ at: time.at, quantity, label: "", past });
   }
 </script>
 

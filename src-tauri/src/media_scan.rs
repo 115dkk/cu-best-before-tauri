@@ -3,7 +3,8 @@
 //! Direct-path writes into `Pictures/` are attributed to the app by the FUSE layer, but
 //! not every firmware indexes them automatically (Samsung / Android 16 did not). The
 //! Kotlin side (`MediaScanPlugin.kt` in `gen/android`) calls `MediaStore.scanFile`.
-//! On desktop this module is a no-op so the shell compiles everywhere.
+//! Its `forgetFile` command also scans a path after Rust deletes the file so MediaStore drops
+//! the stale row. On desktop this module is a no-op so the shell compiles everywhere.
 
 use tauri::Runtime;
 use tauri::plugin::{Builder, TauriPlugin};
@@ -35,6 +36,15 @@ mod android {
                 .run_mobile_plugin("scanFile", ScanFileRequest { path })
                 .map_err(|error| error.to_string())?;
             Ok(response.uri)
+        }
+
+        /// Re-scans a deleted path so MediaStore removes its stale row.
+        pub fn forget_file(&self, path: &str) -> Result<(), String> {
+            let _: serde_json::Value = self
+                .0
+                .run_mobile_plugin("forgetFile", ScanFileRequest { path })
+                .map_err(|error| error.to_string())?;
+            Ok(())
         }
     }
 }
@@ -75,5 +85,21 @@ pub fn register_export<R: Runtime>(
     {
         let _ = (app, path);
         Ok(None)
+    }
+}
+
+/// 지워진 내보내기 파일을 미디어 인덱스에서도 내린다. 데스크톱에서는 no-op.
+pub fn forget_export<R: Runtime>(app: &tauri::AppHandle<R>, path: &str) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        use tauri::Manager;
+        app.state::<MediaScan<R>>()
+            .forget_file(path)
+            .map_err(|error| format!("갤러리 정리 실패: {error}"))
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (app, path);
+        Ok(())
     }
 }

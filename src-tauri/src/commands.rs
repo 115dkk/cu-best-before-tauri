@@ -44,14 +44,14 @@ pub fn list_sheets(state: State<'_, AppState>) -> Result<Vec<SheetSummary>, Stri
 #[tauri::command]
 pub fn create_sheet(state: State<'_, AppState>) -> Result<SheetView, String> {
     let sheet = state.store.create(now()).map_err(message)?;
-    Ok(SheetView::from(&sheet))
+    Ok(SheetView::new(&sheet, now()))
 }
 
 /// id로 조사표를 읽는다.
 #[tauri::command]
 pub fn get_sheet(state: State<'_, AppState>, id: String) -> Result<SheetView, String> {
     let sheet = state.store.load(&id).map_err(message)?;
-    Ok(SheetView::from(&sheet))
+    Ok(SheetView::new(&sheet, now()))
 }
 
 /// 조사표를 정규화해 저장하고, 정규화된 조사표를 돌려준다.
@@ -60,7 +60,7 @@ pub fn get_sheet(state: State<'_, AppState>, id: String) -> Result<SheetView, St
 pub fn save_sheet(state: State<'_, AppState>, sheet: Sheet) -> Result<SheetView, String> {
     let sheet = sheet.normalized(now()).map_err(message)?;
     state.store.save(&sheet).map_err(message)?;
-    Ok(SheetView::from(&sheet))
+    Ok(SheetView::new(&sheet, now()))
 }
 
 /// 조사표를 지운다(멱등).
@@ -76,6 +76,7 @@ pub fn slot_options(product: Product, include: Option<NaiveDateTime>) -> SlotOpt
 }
 
 /// 조사표를 기기 공용 사진 폴더에 PNG로 저장하고, 갤러리가 보도록 MediaStore에 등록한다.
+/// 이전 내보내기 파일은 지우고 MediaStore에서도 내린다.
 #[tauri::command]
 pub fn export_sheet(
     app: AppHandle,
@@ -87,6 +88,10 @@ pub fn export_sheet(
     let app_pictures = app.path().picture_dir().map_err(message)?;
     let pictures = export::public_pictures_dir(&app_pictures);
     let mut result = export::export_png(&sheet, &pictures).map_err(message)?;
+    // 이전 내보내기는 파일이 이미 지워졌다. 인덱스 정리 실패는 사용자에게 알릴 일이 아니라 무시한다.
+    for removed in &result.removed {
+        let _ = media_scan::forget_export(&app, removed);
+    }
     // 파일은 이미 저장됐다. 등록 실패는 오류로 알리되, 파일이 사라지는 것은 아니다.
     result.media_uri = media_scan::register_export(&app, &result.path)?;
     Ok(result)
