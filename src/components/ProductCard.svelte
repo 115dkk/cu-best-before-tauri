@@ -29,8 +29,11 @@
     <ul class="list">
       {#each entries as entry (entry.at)}
         <li class="row">
-          <button type="button" class="edit press" onclick={() => onedit(entry.at)}>
-            <span class="when num">{entry.label}</span>
+          <button type="button" class="edit press" class:past={entry.past} onclick={() => onedit(entry.at)}>
+            <span class="lead">
+              <span class="when num">{entry.label}</span>
+              {#if entry.past}<span class="flag">지남</span>{/if}
+            </span>
             <span class="qty num">{entry.quantity}<span class="unit">개</span></span>
           </button>
           <button type="button" class="icon-btn press remove" aria-label="삭제" onclick={() => ondelete(entry.at)}>
@@ -105,9 +108,27 @@
     background: var(--elev);
     text-align: left;
   }
+  .lead {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
   .when {
     font-size: 17px;
     font-weight: 600;
+  }
+  .edit.past .when {
+    color: var(--muted);
+  }
+  .flag {
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.4;
+    color: var(--muted);
+    background: var(--surface);
   }
   .qty {
     font-size: 19px;

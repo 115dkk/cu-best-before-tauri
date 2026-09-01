@@ -26,6 +26,8 @@ export interface EntryView {
   quantity: number;
   /** "8/30 14시" — identical to the text in the exported PNG. */
   label: string;
+  /** True when the slot has already passed (`at <= now`), same rule as slot candidates. */
+  past: boolean;
 }
 
 export type SectionView = Record<Product, EntryView[]>;
@@ -75,6 +77,8 @@ export interface ExportResult {
   bytes: number;
   /** MediaStore content uri once the file is registered with the gallery (Android). */
   media_uri: string | null;
+  /** Full paths of earlier exports of the same sheet that this export deleted. */
+  removed: string[];
 }
 
 export const api = {

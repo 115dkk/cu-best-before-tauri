@@ -163,26 +163,37 @@ pub fn render_png(sheet: &Sheet) -> Result<Vec<u8>>;
 
 ```rust
 pub const EXPORT_SUBDIR: &str = "소비기한";
-pub struct ExportResult { pub path: String, pub file_name: String, pub bytes: u64, #[serde(default)] pub media_uri: Option<String> /* shell이 Android에서 채움 */ }
+pub struct ExportResult {
+    pub path: String, pub file_name: String, pub bytes: u64,
+    #[serde(default)] pub media_uri: Option<String>, // shell이 Android에서 채움
+    #[serde(default)] pub removed: Vec<String>,      // 이번 내보내기가 지운 이전 내보내기 파일의 전체 경로
+}
 pub fn public_pictures_dir(app_pictures_dir: &Path) -> PathBuf;  // ".../Android/data/<pkg>/files/Pictures" → ".../Pictures"; Android 없으면 그대로
-pub fn export_file_name(sheet: &Sheet) -> String;                // "소비기한_2026-08-30_0802.png"
-pub fn export_png(sheet: &Sheet, pictures_dir: &Path) -> Result<ExportResult>; // pictures_dir/소비기한/<name>, 덮어쓰기
+pub fn export_stem(sheet: &Sheet) -> String;                     // "소비기한_2026-08-30_0802" (created_at 기준)
+pub fn export_file_name(sheet: &Sheet, sequence: u32) -> String; // 1 → "<stem>.png", n≥2 → "<stem> (n).png"
+pub fn export_sequence(sheet: &Sheet, file_name: &str) -> Option<u32>; // 정확히 "<stem>.png"(1) 또는 "<stem> (n).png"(n≥2, 선행 0 없음)만
+/// pictures_dir/소비기한/ 에 **새 이름**(기존 최대 sequence + 1, 없으면 1)으로 먼저 쓰고, 같은 조사표의 이전 파일을 지운다
+/// (지운 경로가 `removed`; 삭제 실패는 건너뛰고 오류로 올리지 않는다). 다른 조사표의 파일은 건드리지 않는다.
+pub fn export_png(sheet: &Sheet, pictures_dir: &Path) -> Result<ExportResult>;
 ```
+
+같은 이름으로 덮어쓰면 MediaStore가 새 사진으로 보지 않아 갤러리 맨 앞에 올라오지 않는다(ADR-0003 보강 2). 그래서 내보내기마다 새 이름을 쓰고, 조사표 하나에 파일 하나만 남긴다.
 
 ## 7. `view.rs` (ADR-0008)
 
 ```rust
-pub struct EntryView { pub at: NaiveDateTime, pub quantity: u32, pub label: String }   // label = entry_label(at)
+pub struct EntryView { pub at: NaiveDateTime, pub quantity: u32, pub label: String /* entry_label(at) */, #[serde(default)] pub past: bool /* at <= now */ }
+impl EntryView { pub fn new(entry: &Entry, now: NaiveDateTime) -> EntryView; }
 pub type SectionView = BTreeMap<Product, Vec<EntryView>>;
 pub struct SheetView { pub id: String, pub created_at: NaiveDateTime, pub created_label: String /* sheet_label */, pub updated_at: NaiveDateTime, pub sections: BTreeMap<Location, SectionView> /* 키 완비 */ }
-impl From<&Sheet> for SheetView;   // 빠진 키를 빈 Vec으로 채운다
+impl SheetView { pub fn new(sheet: &Sheet, now: NaiveDateTime) -> SheetView; }   // 빠진 키를 빈 Vec으로 채운다; `past`는 now 기준
 
 pub struct CatalogItem<K> { pub key: K, pub label: String }
 pub struct Catalog { pub products: Vec<CatalogItem<Product>>, pub locations: Vec<CatalogItem<Location>> }
 impl Catalog { pub fn current() -> Catalog }  // Product::ALL / Location::ALL 순서
 ```
 
-뷰 JSON은 저장 JSON의 상위 집합이다(`created_label`, 항목의 `label`이 추가). `Sheet`는 모르는 필드를 무시하므로 프론트엔드는 뷰를 그대로 `save_sheet`에 보낸다.
+뷰 JSON은 저장 JSON의 상위 집합이다(`created_label`, 항목의 `label`·`past`가 추가). `Sheet`는 모르는 필드를 무시하므로 프론트엔드는 뷰를 그대로 `save_sheet`에 보낸다. `past`는 화면이 '지남' 표시를 붙이는 근거이며, 슬롯 후보 판정(`at > now`가 후보)과 같은 기준이다.
 
 ## 8. `error.rs`
 
@@ -214,7 +225,9 @@ pub type Result<T> = std::result::Result<T, Error>;
 | `save_sheet` | `sheet: Sheet` (뷰 JSON 허용) | `SheetView` | `normalized(now)` → `store.save` → 뷰 |
 | `delete_sheet` | `id: String` | `()` | `store.delete` |
 | `slot_options` | `product: Product, include: Option<NaiveDateTime>` | `SlotOptions` | `default_slot_options(product, now, include)` |
-| `export_sheet` | `id: String` | `ExportResult` | `store.load` → `picture_dir()` → `public_pictures_dir` → `export_png` → Android: `MediaScanPlugin.scanFile`로 MediaStore 등록(`media_uri`) |
+| `export_sheet` | `id: String` | `ExportResult` | `store.load` → `picture_dir()` → `public_pictures_dir` → `export_png` → Android: `removed`의 각 경로를 `MediaScanPlugin.forgetFile`로 인덱스에서 내리고(실패 무시) 새 파일을 `scanFile`로 등록(`media_uri`) |
+
+`create_sheet` / `get_sheet` / `save_sheet`는 `SheetView::new(&sheet, now)`로 뷰를 만든다(`past` 계산).
 
 프론트엔드 호출 예: `invoke("slot_options", { product: "lunchbox", include: "2026-08-29T14:00:00" | null })`.
 
@@ -224,5 +237,5 @@ pub type Result<T> = std::result::Result<T, Error>;
 - slots: ADR-0006 예시 5개, horizon 경계, include(과거 날짜 삽입·기존 날짜 병합·중복 없음·비슬롯 무시), 라벨(date/time/entry/sheet/요일).
 - store: save/load 왕복, list 정렬·깨진 파일 건너뜀, delete 멱등, purge 경계, `open_in`, `create` id 충돌 회피, `purge_expired`.
 - render: 빈 조사표 700px + X표, 항목 3개 행 높이, PNG 디코드, 테두리·병합 규칙, 헤더 시각.
-- export: 경로 파생, 파일명, 저장·덮어쓰기.
-- view: 키 채움·라벨, 뷰→Sheet 왕복, 카탈로그 순서.
+- export: 경로 파생, 파일명·sequence 파싱, 첫 저장, 재저장 시 새 이름 + 이전 파일 삭제(`removed`), 다른 조사표 파일 보존, 빠진 번호 뒤 이어가기.
+- view: 키 채움·라벨, `past` 판정(now 이하), 뷰→Sheet 왕복, 카탈로그 순서.

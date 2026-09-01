@@ -15,6 +15,11 @@ class ScanFileArgs {
   lateinit var path: String
 }
 
+@InvokeArg
+class ForgetFileArgs {
+  lateinit var path: String
+}
+
 /**
  * Registers a file the Rust side wrote into shared storage with MediaStore so
  * gallery apps show it (ADR-0003). Direct-path writes are not reliably
@@ -40,5 +45,20 @@ class MediaScanPlugin(private val activity: Activity) : Plugin(activity) {
       result.put("uri", uri?.toString())
       invoke.resolve(result)
     }
+  }
+
+  /**
+   * Rescans a path that no longer exists so MediaStore drops its stale row
+   * (the media scanner reconciles a missing file by deleting its entry). Resolves
+   * when the scanner is done; never rejects for a missing file.
+   */
+  @Command
+  fun forgetFile(invoke: Invoke) {
+    val args = invoke.parseArgs(ForgetFileArgs::class.java)
+    MediaScannerConnection.scanFile(
+      activity.applicationContext,
+      arrayOf(File(args.path).absolutePath),
+      arrayOf("image/png")
+    ) { _, _ -> invoke.resolve(JSObject()) }
   }
 }

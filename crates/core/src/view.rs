@@ -1,9 +1,9 @@
 //! 화면이 그대로 찍는 표시용 뷰(ADR-0008).
 //!
 //! 저장 형식([`Sheet`])은 시각만 담고, 화면에 보일 문자열은 전부 여기서 만든다. 그래서
-//! 프론트엔드는 날짜·요일·오전/오후 계산을 하지 않는다(ADR-0001). 뷰 JSON은 저장 형식의
-//! 상위 집합이라 `save_sheet`에 그대로 되돌려 보내도 된다 — [`Sheet`]는 모르는 필드를
-//! 무시한다.
+//! 프론트엔드는 날짜·요일·오전/오후 계산을 하지 않는다(ADR-0001). 항목의 기한 슬롯이
+//! 지났는지도 core가 `now`와 비교해 `past`로 만든다. 뷰 JSON은 저장 형식의 상위 집합이라
+//! `save_sheet`에 그대로 되돌려 보내도 된다 — [`Sheet`]는 모르는 필드를 무시한다.
 
 use std::collections::BTreeMap;
 
@@ -22,14 +22,19 @@ pub struct EntryView {
     pub quantity: u32,
     /// 화면과 PNG가 같은 문자열을 쓰도록 core가 만든 라벨.
     pub label: String,
+    /// 기한 슬롯이 이미 지났는가(`at <= now`). 후보 판정(slots.rs)과 같은 기준이다.
+    #[serde(default)]
+    pub past: bool,
 }
 
-impl From<&Entry> for EntryView {
-    fn from(entry: &Entry) -> EntryView {
+impl EntryView {
+    /// `now` 기준으로 항목 뷰를 만든다.
+    pub fn new(entry: &Entry, now: NaiveDateTime) -> EntryView {
         EntryView {
             at: entry.at,
             quantity: entry.quantity,
             label: slots::entry_label(entry.at),
+            past: entry.at <= now,
         }
     }
 }
@@ -52,8 +57,9 @@ pub struct SheetView {
     pub sections: BTreeMap<Location, SectionView>,
 }
 
-impl From<&Sheet> for SheetView {
-    fn from(sheet: &Sheet) -> SheetView {
+impl SheetView {
+    /// `now` 기준으로 조사표 뷰를 만든다(빠진 키를 빈 Vec으로 채운다).
+    pub fn new(sheet: &Sheet, now: NaiveDateTime) -> SheetView {
         let sections = Location::ALL
             .into_iter()
             .map(|location| {
@@ -63,7 +69,7 @@ impl From<&Sheet> for SheetView {
                         let entries = sheet
                             .entries(location, product)
                             .iter()
-                            .map(EntryView::from)
+                            .map(|entry| EntryView::new(entry, now))
                             .collect();
                         (product, entries)
                     })
@@ -157,7 +163,7 @@ mod tests {
             }],
         );
 
-        let view = SheetView::from(&sheet);
+        let view = SheetView::new(&sheet, at(2026, 8, 30, 8, 2));
         assert_eq!(view.created_label, "8/30 (일) 오전 8:02");
         assert_eq!(view.sections.len(), 2);
         for location in Location::ALL {
@@ -168,6 +174,27 @@ mod tests {
         assert_eq!(onigiri[0].label, "8/31 02시");
         assert_eq!(onigiri[0].quantity, 6);
         assert!(view.sections[&Location::WalkIn][&Product::Burger].is_empty());
+    }
+
+    #[test]
+    fn entry_past_is_true_at_or_before_now() {
+        let now = at(2026, 8, 30, 14, 0);
+        let before = Entry {
+            at: at(2026, 8, 30, 13, 0),
+            quantity: 1,
+        };
+        let same = Entry {
+            at: now,
+            quantity: 2,
+        };
+        let after = Entry {
+            at: at(2026, 8, 30, 15, 0),
+            quantity: 3,
+        };
+
+        assert!(EntryView::new(&before, now).past);
+        assert!(EntryView::new(&same, now).past);
+        assert!(!EntryView::new(&after, now).past);
     }
 
     #[test]
@@ -185,7 +212,8 @@ mod tests {
                 }],
             );
 
-        let value = serde_json::to_value(SheetView::from(&sheet)).expect("serialize view");
+        let value = serde_json::to_value(SheetView::new(&sheet, at(2026, 8, 30, 8, 2)))
+            .expect("serialize view");
         assert_eq!(value["created_label"], json!("8/30 (일) 오전 8:02"));
         assert_eq!(
             value["sections"]["store"]["sandwich"][0]["label"],
