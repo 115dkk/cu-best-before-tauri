@@ -1,21 +1,21 @@
-/* Design tokens — one tinted neutral family + one accent (violet). */
+/* Design tokens — charcoal surfaces, warm white text and a muted teal accent. */
 :root {
   color-scheme: dark;
 
-  --bg: #0e0f16;
-  --surface: #161825;
-  --card: #1c1f2e;
-  --elev: #262a3e;
+  --bg: #111615;
+  --surface: #1a211f;
+  --card: #222b28;
+  --elev: #2d3935;
   --line-strong: rgba(255, 255, 255, 0.14);
 
-  --text: #eceef6;
-  --muted: #9aa0ba;
-  --faint: #5d6383;
+  --text: #f2f1e9;
+  --muted: #adb9b2;
+  --faint: #94a49b;
 
-  --accent: #8d95ff;
-  --accent-strong: #a6acff;
-  --accent-soft: rgba(141, 149, 255, 0.16);
-  --on-accent: #0c0e1c;
+  --accent: #77cbbb;
+  --accent-strong: #a0dfd2;
+  --accent-soft: rgba(119, 203, 187, 0.16);
+  --on-accent: #10241f;
 
   --danger: #ff7b7b;
   --danger-soft: rgba(255, 123, 123, 0.14);
