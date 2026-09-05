@@ -41,7 +41,7 @@ pub struct TimeOption {
     pub at: NaiveDateTime,
     /// 24시간제 시.
     pub hour: u32,
-    /// 시각 휠에 표시할 라벨, 예: `오후 2시`.
+    /// 시각 휠에 표시할 라벨, 예: `14시`.
     pub label: String,
 }
 
@@ -152,10 +152,9 @@ pub fn meridiem(hour: u32) -> (&'static str, u32) {
     (period, hour12)
 }
 
-/// 시각 휠 라벨: `오전 2시`, `오후 12시`. 12시간제이며 0시는 `오전 12시`.
+/// 시각 휠 라벨: `02시`, `14시`. 상품의 소비기한 표기처럼 24시간제 두 자리.
 pub fn time_label(hour: u32) -> String {
-    let (period, hour12) = meridiem(hour);
-    format!("{period} {hour12}시")
+    format!("{hour:02}시")
 }
 
 /// 조사표 작성 시각 라벨(화면용): `8/30 (일) 오전 8:02`.
@@ -326,7 +325,7 @@ mod tests {
         assert!(first.past);
         assert_eq!(first.times.len(), 1);
         assert_eq!(first.times[0].at, past);
-        assert_eq!(first.times[0].label, "오후 2시");
+        assert_eq!(first.times[0].label, "14시");
         assert!(options.dates[1..].iter().all(|day| !day.past));
         assert_eq!(options.dates.len(), 16);
     }
@@ -397,12 +396,12 @@ mod tests {
 
     #[test]
     fn time_label_format() {
-        assert_eq!(time_label(0), "오전 12시");
-        assert_eq!(time_label(2), "오전 2시");
-        assert_eq!(time_label(10), "오전 10시");
-        assert_eq!(time_label(12), "오후 12시");
-        assert_eq!(time_label(14), "오후 2시");
-        assert_eq!(time_label(22), "오후 10시");
+        assert_eq!(time_label(0), "00시");
+        assert_eq!(time_label(2), "02시");
+        assert_eq!(time_label(10), "10시");
+        assert_eq!(time_label(12), "12시");
+        assert_eq!(time_label(14), "14시");
+        assert_eq!(time_label(22), "22시");
     }
 
     #[test]

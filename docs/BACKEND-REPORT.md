@@ -62,7 +62,7 @@ slot_options: { "product": "lunchbox" }
 list_sheets: [{ "id": "20260830-080215", "created_at": "2026-08-30T08:02:15", "updated_at": "2026-08-30T08:10:00", "entry_count": 1, "total_quantity": 12 }]
 create_sheet/get_sheet/save_sheet: { "id": "20260830-080215", "created_at": "2026-08-30T08:02:15", "updated_at": "2026-08-30T08:10:00", "sections": { "store": { "onigiri": [], "gimbap": [], "lunchbox": [], "sandwich": [], "burger": [] }, "walk_in": { "onigiri": [], "gimbap": [], "lunchbox": [], "sandwich": [], "burger": [] } } }
 delete_sheet: null
-slot_options: { "product": "lunchbox", "dates": [{ "date": "2026-08-30", "label": "8/30 (일)", "times": [{ "at": "2026-08-30T14:00:00", "hour": 14, "label": "오후 2시" }] }] }
+slot_options: { "product": "lunchbox", "dates": [{ "date": "2026-08-30", "label": "8/30 (일)", "times": [{ "at": "2026-08-30T14:00:00", "hour": 14, "label": "14시" }] }] }
 export_sheet: { "path": "/storage/emulated/0/Pictures/소비기한/소비기한_2026-08-30_0802.png", "file_name": "소비기한_2026-08-30_0802.png", "bytes": 123456 }
 ```
 

@@ -118,7 +118,7 @@ pub fn default_slot_options(product, now, include: Option<NaiveDateTime>) -> Slo
 
 pub fn date_label(date: NaiveDate) -> String;       // "8/30 (일)"  월·일 앞자리 0 없음, 요일 한글 한 글자
 pub fn meridiem(hour: u32) -> (&'static str, u32);  // (오전|오후, 12시간제 시) 0→(오전,12), 12→(오후,12)
-pub fn time_label(hour: u32) -> String;             // "오전 2시" "오후 10시"
+pub fn time_label(hour: u32) -> String;             // "02시" "22시" (24시간제 두 자리)
 pub fn sheet_label(at: NaiveDateTime) -> String;    // "8/30 (일) 오전 8:02" (조사표 작성 시각, 화면용)
 pub fn entry_label(at: NaiveDateTime) -> String;    // "8/30 14시"  (24시간제 두 자리; PNG와 화면 공용)
 ```

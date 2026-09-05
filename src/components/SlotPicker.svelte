@@ -131,7 +131,7 @@
     position: fixed;
     inset: 0;
     z-index: 20;
-    background: rgba(6, 7, 12, 0.6);
+    background: rgba(6, 10, 8, 0.6);
   }
   .sheet {
     position: fixed;
