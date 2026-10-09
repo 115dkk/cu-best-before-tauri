@@ -21,10 +21,15 @@
 
   let el = $state<HTMLDivElement | null>(null);
   let mounted = false;
-  let settleTimer: ReturnType<typeof setTimeout> | undefined;
+  /** scrollTop our own scrollTo is heading for; null while the user owns the wheel. */
+  let target: number | null = null;
 
   function clampIndex(i: number): number {
     return Math.min(Math.max(i, 0), Math.max(items.length - 1, 0));
+  }
+
+  function centred(node: HTMLDivElement): number {
+    return clampIndex(Math.round(node.scrollTop / ITEM_H));
   }
 
   // Keep the scroll position in sync with `value` (initial mount + external changes).
@@ -32,25 +37,52 @@
     const idx = clampIndex(items.findIndex((it) => it.key === value));
     const node = el;
     if (!node) return;
+    // The wheel commits whatever sits under the band, so a value it just emitted
+    // is already there; scroll-snap finishes the motion without a tug-of-war.
+    if (target === null && centred(node) === idx) {
+      mounted = true;
+      return;
+    }
     const top = idx * ITEM_H;
     if (Math.abs(node.scrollTop - top) > 1) {
+      target = top;
       node.scrollTo({ top, behavior: mounted ? "smooth" : "instant" });
+    } else if (target !== null) {
+      // Already here, but an animation of ours is still heading elsewhere: stop it.
+      if (target !== top) node.scrollTo({ top, behavior: "instant" });
+      target = null;
     }
     mounted = true;
   });
 
-  function settle() {
+  function commit() {
     const node = el;
     if (!node) return;
-    const idx = clampIndex(Math.round(node.scrollTop / ITEM_H));
-    const item = items[idx];
+    const item = items[centred(node)];
     if (item && item.key !== value) onchange(item.key);
   }
 
+  // Commit as soon as an item crosses the band centre, like a native picker,
+  // instead of waiting for the finger to lift and the snap animation to end.
   function onScroll() {
-    // Fallback for engines without `scrollend`; harmless double-call otherwise.
-    clearTimeout(settleTimer);
-    settleTimer = setTimeout(settle, 140);
+    const node = el;
+    if (!node) return;
+    if (target !== null) {
+      // Passing items of our own animation are not choices.
+      if (Math.abs(node.scrollTop - target) > 1) return;
+      target = null;
+    }
+    commit();
+  }
+
+  function onScrollEnd() {
+    target = null;
+    commit();
+  }
+
+  /** A touch or wheel takes the wheel back from an animation still in flight. */
+  function grab() {
+    target = null;
   }
 
   function pick(key: string) {
@@ -63,7 +95,9 @@
   style:height="{HEIGHT}px"
   bind:this={el}
   onscroll={onScroll}
-  onscrollend={settle}
+  onscrollend={onScrollEnd}
+  onpointerdown={grab}
+  onwheel={grab}
   role="listbox"
   aria-label={ariaLabel}
   tabindex="-1"
