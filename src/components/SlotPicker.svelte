@@ -22,6 +22,8 @@
   let dateKey = $state("");
   let timeKey = $state("");
   let qtyKey = $state("1");
+  /** The hour last picked on the time wheel; date changes keep it wherever that date offers it. */
+  let preferredHour: number | undefined;
 
   const dates = $derived(options?.dates ?? []);
   const dateItems = $derived<WheelItem[]>(
@@ -49,6 +51,7 @@
         dateKey = date?.date ?? "";
         const time = date?.times.find((t) => t.at === initial?.at) ?? date?.times[0];
         timeKey = time?.at ?? "";
+        preferredHour = time?.hour;
         qtyKey = String(initial?.quantity ?? 1);
       })
       .catch((e: unknown) => showToast(errorMessage(e), "error"));
@@ -57,12 +60,18 @@
     };
   });
 
+  // The date wheel commits every date it passes, so the hour comes from the
+  // user's last time pick rather than from whatever the previous date left.
   function selectDate(key: string) {
     dateKey = key;
     const next = dates.find((d) => d.date === key)?.times ?? [];
-    const prevHour = times.find((t) => t.at === timeKey)?.hour;
-    const same = next.find((t) => t.hour === prevHour);
+    const same = next.find((t) => t.hour === preferredHour);
     timeKey = (same ?? next[0])?.at ?? "";
+  }
+
+  function selectTime(key: string) {
+    timeKey = key;
+    preferredHour = times.find((t) => t.at === key)?.hour;
   }
 
   function confirm() {
@@ -111,7 +120,7 @@
         <Wheel items={dateItems} value={dateKey} onchange={selectDate} ariaLabel="날짜" />
       </div>
       <div class="col time">
-        <Wheel items={timeItems} value={timeKey} onchange={(k) => (timeKey = k)} ariaLabel="시각" />
+        <Wheel items={timeItems} value={timeKey} onchange={selectTime} ariaLabel="시각" />
       </div>
       <div class="col qty">
         <Wheel items={qtyItems} value={qtyKey} onchange={(k) => (qtyKey = k)} ariaLabel="수량" />
